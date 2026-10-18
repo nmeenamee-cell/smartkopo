@@ -1,0 +1,10 @@
+# Digital universe — hero artwork
+
+Generated with the built-in image_gen tool (transparent background). No CLI/API fallback was used.
+
+Original: `design-assets/digital-universe-v1.png`
+Web asset: `apps/web/public/images/digital-universe-v1.webp` (alpha preserved; WebP compression only).
+
+## Final prompt
+
+Use case: stylized-concept. Asset type: original hero artwork for a Korean university smart software department website, right half of an existing dark navy and lime layout. Create a premium, visually arresting 3D editorial illustration that instantly communicates COMPUTER + AI + CLOUD + WEB to young students. A single coherent miniature digital universe: a beautifully modeled open silver laptop on a floating dark graphite circuit-board island; a luminous translucent neural-network brain emerging as a hologram above the laptop; a large glass cyan globe with visible latitude/longitude rings orbiting to the left; a soft lavender glass cloud floating in the upper right; a substantial lime-lit processor chip embedded in the foreground of the island. Elegant glowing circuit pathways physically connect all four elements. Add a few small luminous data cubes along the pathways. The laptop screen contains a radiant abstract code portal, not a readable dashboard. Tangible beveled surfaces, iridescent glass, brushed metal, realistic ambient occlusion, crisp cinematic rim lighting, restrained cyan/lime/lavender illumination, high-end playful product illustration, impressive depth and clear readable silhouette, rich details without clutter. Three-quarter isometric camera, medium close shot, cohesive centered composition, approximately 4:3 landscape, every main object fully visible, artwork fills about 85% of the canvas. Transparent background with genuine alpha; all glow stays close to the objects and no baked rectangle or solid backdrop. Designed to sit on #0b141b. No humans, no typography, no labels, no letters, no logos, no watermark, no UI panels or floating app windows. This is a final production illustration, not a website screenshot.

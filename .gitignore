@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+dist/
+.env
+.env.*
+!.env.example
+.local/
+*.log
+*.tsbuildinfo
+.site-build/
+
+# Sites hosting metadata belongs to the separate hosted checkout.
+.openai/

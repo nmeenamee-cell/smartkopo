@@ -1,0 +1,2 @@
+const isExport = process.env.EXPORT_STATIC === '1';
+export default { output: isExport ? 'export' : 'standalone', trailingSlash: true, images: { unoptimized: true }, ...(isExport ? {} : { async rewrites() { return [{source:'/api/:path*',destination:(process.env.API_INTERNAL_URL || 'http://127.0.0.1:4100')+'/api/:path*'}]; } }), poweredByHeader:false };

@@ -1,0 +1,36 @@
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?Set MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?Set MONGO_PASSWORD}
+    volumes:
+      - campus-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  api:
+    build:
+      context: .
+      target: api
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/kopo_campus?authSource=admin
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:?Set HTTPS frontend origin}
+    depends_on:
+      mongo:
+        condition: service_healthy
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3100"
+    depends_on:
+      - api
+volumes:
+  campus-data:

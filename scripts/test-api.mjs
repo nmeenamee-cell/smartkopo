@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {MongoMemoryServer} from 'mongodb-memory-server';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const require=createRequire(path.join(root,'apps/api/package.json'));const mongoose=require('mongoose');
+const mongo=await MongoMemoryServer.create({binary:{version:'7.0.24',downloadDir:path.join(root,'.local/mongodb-binaries')}});
+const uri=mongo.getUri('integration_test');const origin='http://127.0.0.1:3100';const base='http://127.0.0.1:4101/api';
+let log='';const child=spawn(process.execPath,['apps/api/dist/main.js'],{cwd:root,env:{...process.env,NODE_ENV:'test',MONGODB_URI:uri,PORT:'4101',HOST:'127.0.0.1',FRONTEND_ORIGINS:origin},windowsHide:true});child.stdout.on('data',b=>log+=b);child.stderr.on('data',b=>log+=b);
+let count=0;const passed=label=>{count++;console.log('PASS '+label)};
+const call=async(route,method='GET',body,cookie,requestOrigin=origin)=>{const r=await fetch(base+route,{method,headers:{'Content-Type':'application/json',Origin:requestOrigin,...(cookie?{Cookie:cookie}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0],headers:r.headers};};
+try{
+ let ready=false;for(let n=0;n<80;n++){try{const r=await fetch(base+'/health');if(r.ok){ready=true;break}}catch{}await new Promise(r=>setTimeout(r,150));}assert.ok(ready,'API starts: '+log);
+ assert.equal((await call('/projects')).status,401);passed('unauthenticated project access rejected');
+ const a={username:'student_a',password:'LongPasswordForTests_2026',name:'테스트 학생 A'};
+ let r=await call('/auth/register','POST',a);assert.equal(r.status,201);const cookieA=r.cookie;assert.ok(cookieA);assert.match(r.headers.get('set-cookie'),/HttpOnly/);assert.match(r.headers.get('set-cookie'),/SameSite=Strict/);assert.equal(r.data.user.passwordHash,undefined);passed('registration and HttpOnly session');
+ assert.equal((await call('/auth/register','POST',a)).status,409);passed('duplicate username rejected');
+ assert.equal((await call('/auth/login','POST',{username:a.username,password:'WrongPassword_123'})).status,401);passed('incorrect password rejected');
+ assert.equal((await call('/auth/login','POST',{username:{$ne:null},password:a.password})).status,400);passed('NoSQL operator injection rejected');
+ assert.equal((await call('/projects','POST',{title:' ',description:'',track:'frontend'},cookieA)).status,400);passed('empty project title rejected');
+ assert.equal((await call('/projects','POST',{title:'test',description:'',track:'frontend',ownerId:'hijack'},cookieA)).status,400);passed('client-supplied ownership rejected');
+ r=await call('/projects','POST',{title:'나의 풀스택 서비스',description:'API integration test',track:'fullstack'},cookieA);assert.equal(r.status,201);const id=r.data.project._id;passed('authenticated project creation');
+ r=await call('/auth/register','POST',{username:'student_b',password:'LongPasswordForTests_2026',name:'테스트 학생 B'});assert.equal(r.status,201);const cookieB=r.cookie;
+ assert.equal((await call('/projects','GET',null,cookieB)).data.projects.length,0);assert.equal((await call('/projects/'+id,'PATCH',{status:'completed'},cookieB)).status,404);assert.equal((await call('/projects/'+id,'DELETE',null,cookieB)).status,404);passed('cross-account list/update/delete blocked');
+ r=await call('/projects/'+id,'PATCH',{status:'completed'},cookieA);assert.equal(r.data.project.status,'completed');passed('owner can update project status');
+ assert.equal((await call('/projects/'+id,'PATCH',{status:'invalid'},cookieA)).status,400);passed('invalid status rejected');
+ assert.equal((await call('/projects','POST',{title:'csrf',description:'',track:'backend'},cookieA,'https://untrusted.example')).status,403);passed('cross-origin mutation blocked');
+ const db=await mongoose.createConnection(uri).asPromise();const user=await db.collection('users').findOne({username:a.username});assert.notEqual(user.passwordHash,a.password);assert.match(user.passwordHash,/^[a-f0-9]{32}:[a-f0-9]{128}$/);const sessions=await db.collection('sessions').find({}).toArray();assert.ok(sessions.every(s=>s.tokenHash!==cookieA?.split('=')[1]));passed('passwords and session tokens stored as hashes');
+ await db.collection('sessions').updateOne({userId:user._id},{$set:{expiresAt:new Date(0)}});assert.equal((await call('/auth/me','GET',null,cookieA)).status,401);passed('expired sessions denied immediately');
+ r=await call('/auth/login','POST',{username:a.username,password:a.password});assert.equal(r.status,201);const fresh=r.cookie;assert.equal((await call('/projects','GET',null,fresh)).data.projects[0].title,'나의 풀스택 서비스');passed('project persists after re-login');
+ assert.equal((await call('/projects/'+id,'DELETE',null,fresh)).status,200);passed('owner can delete own project');
+ await call('/auth/logout','POST',null,fresh);assert.equal((await call('/auth/me','GET',null,fresh)).status,401);passed('logout invalidates server-side session');
+ let limited=false;for(let i=0;i<10;i++){if((await call('/auth/login','POST',{username:a.username,password:'WrongPassword_123'})).status===429){limited=true;break}}assert.ok(limited);passed('login rate limit enforced');
+ await db.close();console.log('ALL '+count+' INTEGRATION CHECKS PASSED');
+}catch(e){console.error(e);process.exitCode=1;}finally{child.kill();await mongoose.disconnect();await mongo.stop();}

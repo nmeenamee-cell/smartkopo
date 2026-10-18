@@ -1,0 +1,6 @@
+packages:
+  - apps/*
+allowBuilds:
+  "@nestjs/core": false
+  "mongodb-memory-server": false
+  "sharp": false

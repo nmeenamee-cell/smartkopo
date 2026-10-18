@@ -1,0 +1,1 @@
+import Link from 'next/link';export default function NotFound(){return <main id="main" className="section"><span className="micro">404 / A NEW DIRECTION</span><h1>찾으시는 페이지가 없습니다.</h1><p>다른 가능성을 탐색해보세요.</p><Link className="button dark" href="/">메인으로 돌아가기 ↗</Link></main>}
