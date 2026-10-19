@@ -89,6 +89,8 @@ Docker 구성은 제공했으나 이 Windows 환경에서 Docker 실행 검증�
 
 Netlify 서버 환경 변수에 `MONGODB_URI`와 `FRONTEND_ORIGINS=https://실제사이트.netlify.app`를 설정하세요. Atlas의 네트워크 접근 목록에서도 배포 서버의 연결을 허용해야 합니다. `.env`와 `.local`은 업로드하지 않습니다. 환경 변수 수정 후에는 다시 배포하세요. Netlify 함수 인스턴스마다 API와 MongoDB 연결을 재사용하며, 로그인 제한 카운터는 인스턴스별로 적용됩니다.
 
+Node.js 24에서 CommonJS로 컴파일한 API가 NestJS 12의 ESM 패키지를 로드하므로, Netlify UI의 함수 환경 변수에 `NODE_OPTIONS=--experimental-require-module`도 설정합니다. AWS Lambda가 기본적으로 끄는 Node 모듈 호환 기능을 로컬 Node와 같게 활성화합니다. 함수 의존성은 pnpm 구조를 추적하는 `nft`로 패키징합니다.
+
 ## 온라인 미리보기
 
 ~~~sh
