@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { Module, Controller, Get, Post, Patch, Delete, Body, Req, Res, Param, Injectable, CanActivate, ExecutionContext, UnauthorizedException, ConflictException, BadRequestException, NotFoundException, ValidationPipe, UseGuards } from '@nestjs/common';
+import { Module, Controller, Get, Post, Patch, Delete, Body, Req, Res, Param, Query, Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException, ConflictException, BadRequestException, NotFoundException, ValidationPipe, UseGuards } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { IsString, Length, Matches, IsIn } from 'class-validator';
@@ -14,12 +14,16 @@ import { Store } from './store';
 const derive = promisify(scrypt);
 const hash = (s:string)=>createHash('sha256').update(s).digest('hex');
 const cookieName = 'kopo_session';
-const publicUser = (u:any)=>({id:String(u._id),username:u.username,name:u.name});
+const publicUser = (u:any)=>({id:String(u._id),username:u.username,name:u.name,role:u.role==='admin'?'admin':'user'});
 class LoginDto {
  @IsString() @Matches(/^[a-z0-9_]{4,32}$/) username!:string;
- @IsString() @Length(12,128) password!:string;
+ @IsString() @Length(8,128) password!:string;
 }
-class RegisterDto extends LoginDto { @IsString() @Length(2,40) name!:string; }
+class RegisterDto {
+ @IsString() @Matches(/^[a-z0-9_]{4,32}$/) username!:string;
+ @IsString() @Length(12,128) password!:string;
+ @IsString() @Length(2,40) name!:string;
+}
 class ProjectDto {
  @IsString() @Length(1,80) @Matches(/\S/) title!:string;
  @IsString() @Length(0,1000) description!:string;
@@ -36,6 +40,13 @@ class SessionGuard implements CanActivate {
   if(!session)throw new UnauthorizedException('세션이 만료되었습니다. 다시 로그인해주세요.');
   const user=await this.store.users.findById(session.userId).lean();
   if(!user)throw new UnauthorizedException();req.user=user;return true;
+ }
+}
+@Injectable()
+class AdminGuard implements CanActivate {
+ canActivate(ctx:ExecutionContext){
+  if(ctx.switchToHttp().getRequest().user?.role!=='admin')throw new ForbiddenException('관리자만 접근할 수 있습니다.');
+  return true;
  }
 }
 @Controller('api')
@@ -69,6 +80,17 @@ class ApiController {
   res.clearCookie(cookieName,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/api'});return {ok:true};
  }
  @Get('auth/me') @UseGuards(SessionGuard) me(@Req() req:any,@Res({passthrough:true}) res:Response){res.setHeader('Cache-Control','no-store');return {user:publicUser(req.user)};}
+ @Get('admin/users') @UseGuards(SessionGuard,AdminGuard)
+ async adminUsers(@Query('page') requestedPage?:string){
+  const page=requestedPage===undefined?1:Number(requestedPage);
+  if((requestedPage!==undefined&&!/^[1-9]\d*$/.test(requestedPage))||!Number.isSafeInteger(page)||page>100000)throw new BadRequestException('페이지 번호를 확인해주세요.');
+  const pageSize=20;
+  const [totalUsers,totalProjects,users]=await Promise.all([
+   this.store.users.countDocuments(),this.store.projects.countDocuments(),
+   this.store.users.find().select('_id username name role createdAt').sort({createdAt:-1,_id:-1}).skip((page-1)*pageSize).limit(pageSize).lean()
+  ]);
+  return {users:users.map(u=>({...publicUser(u),createdAt:u.createdAt})),page,pageSize,totalUsers,totalProjects};
+ }
  @Get('projects') @UseGuards(SessionGuard) async list(@Req() req:any){return {projects:await this.store.projects.find({ownerId:req.user._id}).select('-ownerId -__v').sort({createdAt:-1}).lean()};}
  @Post('projects') @UseGuards(SessionGuard) async create(@Body() dto:ProjectDto,@Req() req:any){return {project:await this.store.projects.create({...dto,title:dto.title.trim(),ownerId:req.user._id})};}
  @Patch('projects/:id') @UseGuards(SessionGuard) async update(@Param('id') id:string,@Body() dto:StatusDto,@Req() req:any){
@@ -81,7 +103,7 @@ class ApiController {
   const result=await this.store.projects.deleteOne({_id:id,ownerId:req.user._id});if(!result.deletedCount)throw new NotFoundException();return {ok:true};
  }
 }
-@Module({imports:[ThrottlerModule.forRoot([{ttl:60000,limit:120}])],controllers:[ApiController],providers:[Store,SessionGuard,{provide:APP_GUARD,useClass:ThrottlerGuard}]})
+@Module({imports:[ThrottlerModule.forRoot([{ttl:60000,limit:120}])],controllers:[ApiController],providers:[Store,SessionGuard,AdminGuard,{provide:APP_GUARD,useClass:ThrottlerGuard}]})
 class AppModule {}
 async function bootstrap(){
  const app=await NestFactory.create(AppModule);
