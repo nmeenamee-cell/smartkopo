@@ -105,14 +105,18 @@ class ApiController {
 }
 @Module({imports:[ThrottlerModule.forRoot([{ttl:60000,limit:120}])],controllers:[ApiController],providers:[Store,SessionGuard,AdminGuard,{provide:APP_GUARD,useClass:ThrottlerGuard}]})
 class AppModule {}
-async function bootstrap(){
- const app=await NestFactory.create(AppModule);
+export async function createApiApp(){
  const origins=(process.env.FRONTEND_ORIGINS||'http://127.0.0.1:3100,http://localhost:3100').split(',');
  if(process.env.NODE_ENV==='production'&&(!process.env.FRONTEND_ORIGINS||origins.some(o=>!o.startsWith('https://'))))throw new Error('Production FRONTEND_ORIGINS must contain explicit HTTPS origins');
+ const app=await NestFactory.create(AppModule,{abortOnError:false});
  app.use(helmet());app.use(cookieParser());
  app.use((req:Request,res:Response,next:()=>void)=>{res.setHeader('Cache-Control','no-store');if(!['GET','HEAD','OPTIONS'].includes(req.method)&&(!req.headers.origin||!origins.includes(req.headers.origin))){res.status(403).json({message:'허용되지 않은 요청입니다.'});return;}next();});
  app.enableCors({origin:origins,credentials:true});
  app.useGlobalPipes(new ValidationPipe({whitelist:true,forbidNonWhitelisted:true,transform:true}));
+ return app;
+}
+async function bootstrap(){
+ const app=await createApiApp();
  app.enableShutdownHooks();await app.listen(Number(process.env.PORT||4100),process.env.HOST||'127.0.0.1');
 }
-bootstrap().catch(()=>{console.error('API startup failed. Check database and origin configuration.');process.exit(1);});
+if(require.main===module)bootstrap().catch(()=>{console.error('API startup failed. Check database and origin configuration.');process.exit(1);});

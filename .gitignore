@@ -9,6 +9,7 @@ dist/
 *.log
 *.tsbuildinfo
 .site-build/
+.netlify/
 
 # Sites hosting metadata belongs to the separate hosted checkout.
 .openai/
