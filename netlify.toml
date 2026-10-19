@@ -9,7 +9,7 @@
   NETLIFY_NEXT_PLUGIN_SKIP = "true"
 
 [functions]
-  node_bundler = "zisi"
+  node_bundler = "nft"
 
 [[redirects]]
   from = "/api/*"
